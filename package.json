@@ -1,0 +1,43 @@
+{
+  "name": "migrazed",
+  "version": "1.0.0",
+  "description": "Convert VS Code themes to Zed editor format",
+  "keywords": [
+    "vscode",
+    "zed",
+    "theme",
+    "converter",
+    "migration"
+  ],
+  "author": "Ender Bonnet",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/enBonnet/migrazed"
+  },
+  "bugs": {
+    "url": "https://github.com/enBonnet/migrazed/issues"
+  },
+  "homepage": "https://github.com/enBonnet/migrazed#readme",
+  "bin": {
+    "migrazed": "./bin/migrazed"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "lint": "tsc --noEmit",
+    "start": "bun run src/script.ts"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
