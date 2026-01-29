@@ -36,7 +36,7 @@ declare const process: {
 // Type Definitions
 // ============================================================================
 
-interface VSCodeTheme {
+export interface VSCodeTheme {
   name?: string;
   author?: string;
   type?: "dark" | "light";
@@ -46,7 +46,7 @@ interface VSCodeTheme {
   semanticTokenColors?: Record<string, string>;
 }
 
-interface VSCodeTokenColor {
+export interface VSCodeTokenColor {
   name?: string;
   scope?: string | string[];
   settings: {
@@ -56,14 +56,14 @@ interface VSCodeTokenColor {
   };
 }
 
-interface ZedTheme {
+export interface ZedTheme {
   $schema: string;
   name: string;
   author: string;
   themes: ZedThemeVariant[];
 }
 
-interface ZedThemeVariant {
+export interface ZedThemeVariant {
   name: string;
   appearance: "dark" | "light";
   style: ZedStyle;
@@ -594,7 +594,7 @@ const tokenToSyntaxMapping: Record<string, string> = {
 // Utility Functions
 // ============================================================================
 
-function hexToRgba(hex: string, alpha: number): string {
+export function hexToRgba(hex: string, alpha: number): string {
   // Remove # if present
   hex = hex.replace("#", "");
 
@@ -621,7 +621,7 @@ function hexToRgba(hex: string, alpha: number): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}${a}`;
 }
 
-function adjustColor(hex: string, amount: number): string {
+export function adjustColor(hex: string, amount: number): string {
   hex = hex.replace("#", "");
 
   let r: number, g: number, b: number;
@@ -642,7 +642,7 @@ function adjustColor(hex: string, amount: number): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
-function isLightColor(hex: string): boolean {
+export function isLightColor(hex: string): boolean {
   hex = hex.replace("#", "");
 
   let r: number, g: number, b: number;
