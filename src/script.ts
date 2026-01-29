@@ -6,9 +6,16 @@
  * This script converts VS Code theme JSON files to Zed theme format.
  *
  * Usage:
- *   bun run script.ts <input-vscode-theme.json> [output-directory]
+ *   bun run script.ts <dark-theme.json> [-l <light-theme.json>] [-o <output-path>]
  *
- * If output directory is not provided, the theme will be saved next to the script.
+ * Arguments:
+ *   <dark-theme.json>         Path to the VS Code dark theme JSON file (required)
+ *   -l, --light <path>        Path to the VS Code light theme JSON file (optional)
+ *   -o, --output <path>       Output path for the Zed theme file (optional)
+ *
+ * If -o is not provided, the theme will be saved in the current working directory.
+ * If both dark and light themes are provided, they will be merged into a single
+ * Zed theme file with both variants.
  */
 
 import * as fs from "fs";
@@ -22,6 +29,7 @@ declare const Bun: {
 
 declare const process: {
   exit(code: number): never;
+  cwd(): string;
 };
 
 // ============================================================================
@@ -908,10 +916,9 @@ function generatePlayerColors(editorBg: string, isLight: boolean): ZedPlayerColo
   }));
 }
 
-function convertTheme(vsCodeTheme: VSCodeTheme): ZedTheme {
+function convertThemeToVariant(vsCodeTheme: VSCodeTheme): ZedThemeVariant {
   const appearance: "dark" | "light" = vsCodeTheme.type || "dark";
   const themeName = vsCodeTheme.name || "Converted Theme";
-  const author = vsCodeTheme.author || "";
 
   // Convert colors
   const colors = vsCodeTheme.colors || {};
@@ -937,20 +944,119 @@ function convertTheme(vsCodeTheme: VSCodeTheme): ZedTheme {
   }
   style.accents = accentColors;
 
+  const zedThemeVariant: ZedThemeVariant = {
+    name: themeName,
+    appearance: appearance,
+    style: style,
+  };
+
+  return zedThemeVariant;
+}
+
+function createZedTheme(
+  darkVariant: ZedThemeVariant,
+  lightVariant?: ZedThemeVariant,
+  themeName?: string,
+  author?: string
+): ZedTheme {
+  const themes: ZedThemeVariant[] = [darkVariant];
+  if (lightVariant) {
+    themes.push(lightVariant);
+  }
+
   const zedTheme: ZedTheme = {
     $schema: "https://zed.dev/schema/themes/v0.2.0.json",
-    name: themeName,
-    author: author,
-    themes: [
-      {
-        name: themeName,
-        appearance: appearance,
-        style: style,
-      },
-    ],
+    name: themeName || darkVariant.name,
+    author: author || "",
+    themes: themes,
   };
 
   return zedTheme;
+}
+
+// ============================================================================
+// Argument Parsing
+// ============================================================================
+
+interface ParsedArgs {
+  darkThemePath: string;
+  lightThemePath?: string;
+  outputPath?: string;
+}
+
+function parseArgs(args: string[]): ParsedArgs {
+  const result: Partial<ParsedArgs> = {};
+  let i = 0;
+
+  while (i < args.length) {
+    const arg = args[i];
+
+    if (arg === "-l" || arg === "--light") {
+      i++;
+      if (i >= args.length) {
+        console.error("Error: -l/--light flag requires a path argument");
+        process.exit(1);
+      }
+      result.lightThemePath = args[i];
+    } else if (arg === "-o" || arg === "--output") {
+      i++;
+      if (i >= args.length) {
+        console.error("Error: -o/--output flag requires a path argument");
+        process.exit(1);
+      }
+      result.outputPath = args[i];
+    } else if (!arg.startsWith("-")) {
+      // Positional argument - dark theme path
+      if (result.darkThemePath) {
+        console.error("Error: Only one dark theme path should be provided as a positional argument");
+        process.exit(1);
+      }
+      result.darkThemePath = arg;
+    } else {
+      console.error(`Error: Unknown flag: ${arg}`);
+      process.exit(1);
+    }
+    i++;
+  }
+
+  if (!result.darkThemePath) {
+    console.error("Error: Dark theme path is required as a positional argument");
+    printUsage();
+    process.exit(1);
+  }
+
+  return result as ParsedArgs;
+}
+
+function printUsage(): void {
+  console.error("Usage: bun run script.ts <dark-theme.json> [-l <light-theme.json>] [-o <output-path>]");
+  console.error("");
+  console.error("Arguments:");
+  console.error("  <dark-theme.json>         Path to the VS Code dark theme JSON file (required)");
+  console.error("  -l, --light <path>        Path to the VS Code light theme JSON file (optional)");
+  console.error("  -o, --output <path>       Output path for the Zed theme file (optional)");
+  console.error("");
+  console.error("Examples:");
+  console.error("  bun run script.ts dark-theme.json");
+  console.error("  bun run script.ts dark-theme.json -l light-theme.json");
+  console.error("  bun run script.ts dark-theme.json -l light-theme.json -o ./themes/my-theme.json");
+}
+
+function loadVSCodeTheme(themePath: string): VSCodeTheme {
+  const resolvedPath = path.resolve(themePath);
+
+  if (!fs.existsSync(resolvedPath)) {
+    console.error(`Error: Theme file not found: ${resolvedPath}`);
+    process.exit(1);
+  }
+
+  try {
+    const content = fs.readFileSync(resolvedPath, "utf-8");
+    return JSON.parse(content);
+  } catch (error) {
+    console.error(`Error: Failed to parse theme file ${resolvedPath}: ${error}`);
+    process.exit(1);
+  }
 }
 
 // ============================================================================
@@ -960,55 +1066,66 @@ function convertTheme(vsCodeTheme: VSCodeTheme): ZedTheme {
 function main(): void {
   const args = Bun.argv.slice(2);
 
-  if (args.length < 1) {
-    console.error("Usage: bun run script.ts <input-vscode-theme.json> [output-directory]");
-    console.error("");
-    console.error("Arguments:");
-    console.error("  input-vscode-theme.json  Path to the VS Code theme JSON file");
-    console.error("  output-directory         Optional: Directory where the Zed theme will be saved");
-    console.error("                           If not provided, the theme will be saved next to the script");
-    process.exit(1);
+  if (args.length < 1 || args.includes("-h") || args.includes("--help")) {
+    printUsage();
+    if (args.length < 1) {
+      process.exit(1);
+    }
+    process.exit(0);
   }
 
-  const inputPath = path.resolve(args[0]);
-  const outputDir = args[1] ? path.resolve(args[1]) : path.dirname(Bun.main);
+  const parsedArgs = parseArgs(args);
 
-  // Validate input file
-  if (!fs.existsSync(inputPath)) {
-    console.error(`Error: Input file not found: ${inputPath}`);
-    process.exit(1);
+  // Load dark theme
+  console.log(`Loading dark theme: ${parsedArgs.darkThemePath}...`);
+  const darkVSCodeTheme = loadVSCodeTheme(parsedArgs.darkThemePath);
+  const darkVariant = convertThemeToVariant(darkVSCodeTheme);
+
+  // Load light theme if provided
+  let lightVariant: ZedThemeVariant | undefined;
+  if (parsedArgs.lightThemePath) {
+    console.log(`Loading light theme: ${parsedArgs.lightThemePath}...`);
+    const lightVSCodeTheme = loadVSCodeTheme(parsedArgs.lightThemePath);
+    lightVariant = convertThemeToVariant(lightVSCodeTheme);
+  }
+
+  // Create the Zed theme
+  const zedTheme = createZedTheme(
+    darkVariant,
+    lightVariant,
+    darkVSCodeTheme.name,
+    darkVSCodeTheme.author
+  );
+
+  // Determine output path
+  let outputPath: string;
+  if (parsedArgs.outputPath) {
+    // Use specified output path
+    outputPath = path.resolve(parsedArgs.outputPath);
+  } else {
+    // Default to current working directory with dark theme base name
+    const baseName = path.basename(parsedArgs.darkThemePath, ".json");
+    const outputFileName = `${baseName}.json`;
+    outputPath = path.join(process.cwd(), outputFileName);
   }
 
   // Ensure output directory exists
+  const outputDir = path.dirname(outputPath);
   if (!fs.existsSync(outputDir)) {
     console.log(`Creating output directory: ${outputDir}`);
     fs.mkdirSync(outputDir, { recursive: true });
   }
-
-  // Read and parse VS Code theme
-  let vsCodeTheme: VSCodeTheme = {};
-  try {
-    const content = fs.readFileSync(inputPath, "utf-8");
-    vsCodeTheme = JSON.parse(content);
-  } catch (error) {
-    console.error(`Error: Failed to parse input file: ${error}`);
-    process.exit(1);
-  }
-
-  // Convert theme
-  console.log(`Converting theme: ${vsCodeTheme.name || "Unnamed Theme"}...`);
-  const zedTheme = convertTheme(vsCodeTheme);
-
-  // Generate output filename
-  const baseName = path.basename(inputPath, ".json");
-  const outputFileName = `${baseName}.json`;
-  const outputPath = path.join(outputDir, outputFileName);
 
   // Write output
   try {
     const output = JSON.stringify(zedTheme, null, 2);
     fs.writeFileSync(outputPath, output, "utf-8");
     console.log(`✓ Successfully converted theme to: ${outputPath}`);
+    if (lightVariant) {
+      console.log(`  - Includes dark and light variants`);
+    } else {
+      console.log(`  - Includes dark variant only`);
+    }
   } catch (error) {
     console.error(`Error: Failed to write output file: ${error}`);
     process.exit(1);
